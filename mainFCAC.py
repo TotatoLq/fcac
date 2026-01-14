@@ -20,7 +20,7 @@ from sklearn.metrics.cluster import adjusted_mutual_info_score
 
 
 # data_list = ["hillvalley", "ozone", "bioresponse", "phoneme", "texture", "optdigits", "pendigits", "mozilla4", "magic", "letter", "skin"]
-data_name = "optdigits"
+data_name = "hillvalley"
 
 
 
@@ -47,6 +47,7 @@ all_n_clusters = []
 all_ari = []
 all_ami = []
 all_nmi = []
+all_acc = []
 
 
 print(data_name)
