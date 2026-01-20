@@ -1,4 +1,4 @@
-
+import os
 import numpy as np
 import scipy as sp
 import pandas as pd
@@ -37,6 +37,16 @@ def load_openml_dataset(data_name, num_clients, alpha, niid, balance, partition)
     num_classes = np.unique(target).shape[0]
 
     return data, target, num_classes
+def load_federated_pickle_dataset(data_name, data_dir="datasets"):
+    dataset = load_dataset(f"{data_dir}/{data_name}.pkl")
+    num_clients = dataset.get("order")
+    if num_clients is None:
+        num_clients = len([key for key in dataset.keys() if key.startswith("client_")])
+    train_data = [dataset[f"client_{client_idx}"] for client_idx in range(num_clients)]
+    full_data = dataset["full_data"]
+    true_label = dataset["true_label"]
+    num_classes = np.unique(true_label).shape[0]
+    return full_data, true_label, train_data, num_clients, num_classes
 
 def set_dataset(data_name, niid=True, SEED=0):
     # Dataset Configuration --------------------------------------------------------------
@@ -175,9 +185,16 @@ def set_dataset(data_name, niid=True, SEED=0):
         selected_dataset = "skin-segmentation"
         num_clients = 100
         DATA, TARGET, num_classes = load_openml_dataset(selected_dataset, num_clients, alpha, niid, balance, partition)
-
     else:
-        raise Exception('Select an existing dataset.')
+        dataset_path = os.path.join(os.path.dirname(__file__), "datasets", selected_dataset+".pkl")
+        dataset = load_dataset(dataset_path)
+        DATA = np.array(dataset["full_data"])
+        TARGET = np.array(dataset["true_label"], dtype=int)
+        num_clients = len(dataset.get("order", [])) or len(
+            [key for key in dataset.keys() if key.startswith("client_") and not key.endswith("edge_index")]
+        )
+        num_classes = dataset.get("num_clusters", np.unique(TARGET).shape[0])
+
 
     # randomize data
     np.random.seed(SEED)
@@ -215,6 +232,18 @@ def add_laplace_noise(data, epsilon, seed=None):
     scale = sensitivity / epsilon
     noise = rng.laplace(scale=scale, size=data.shape)
     return data + noise
+
+def clustering_accuracy(true_labels, predicted_labels):
+    true_labels = np.asarray(true_labels, dtype=int)
+    predicted_labels = np.asarray(predicted_labels, dtype=int)
+    if true_labels.size == 0:
+        return 0.0
+    num_classes = max(true_labels.max(), predicted_labels.max()) + 1
+    confusion_matrix = np.zeros((num_classes, num_classes), dtype=int)
+    for i in range(true_labels.size):
+        confusion_matrix[true_labels[i], predicted_labels[i]] += 1
+    row_ind, col_ind = sp.optimize.linear_sum_assignment(confusion_matrix.max() - confusion_matrix)
+    return confusion_matrix[row_ind, col_ind].sum() / true_labels.size
 
 
 def find_nearest_centroid(data_points, centroids):
